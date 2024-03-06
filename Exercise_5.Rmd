@@ -1,0 +1,345 @@
+---
+title: "Exercise 5"
+author: "Sarah"
+date: "2024-02-29"
+output: html_document
+---
+# Challenge 1
+1. Read in data and load tidyverse
+```{r}
+library(tidyverse)
+library(infer)
+
+f<-"https://raw.githubusercontent.com/difiore/ada-2024-datasets/main/IMDB-movies.csv"
+
+d<-read.csv(f, header = TRUE)
+```
+2. Filter dataset
+```{R}
+d<- d%>%
+  subset(startYear>=1920 & startYear<=1979)%>%
+  subset(runtimeMinutes>=60 & runtimeMinutes<=180)%>%
+  mutate(Decade=recode(findInterval(startYear, c(1920,1930,1940,1950,1960,1970)), "1"="20s", "2"="30s", "3"="40s", "4"="50s", "5"="60s", "6"="70s"))
+```
+3. Plot runtime histograms for each decade
+```{R}
+p<-ggplot(d, aes(x=runtimeMinutes, color = paste(Decade)))+
+  geom_histogram(binwidth = 5)+
+  facet_wrap(vars(Decade))
+p
+```
+
+4. Create Results dataframe for population mean and sd for run time for each decade
+```{R}
+results<-d%>%
+  group_by(Decade)%>%
+  summarise(mean=mean(runtimeMinutes), sd=sd(runtimeMinutes), n=length(runtimeMinutes))
+```
+5. Sample 100 movies from each decade and calculate sample mean and SD
+```{R}
+s<-group_by(d, Decade)%>%
+  slice_sample(n=100, replace=FALSE)
+
+Sample_means<-s%>%
+  group_by(Decade)%>%
+  summarise(mean=mean(runtimeMinutes), sd=sd(runtimeMinutes))
+```
+6. Calculate SE for each decade
+```{R}
+Sample_means<-mutate(Sample_means, "SE"= Sample_means$sd/sqrt(100))
+```
+7. Compare estimates to population mean runtimeMinutes for each decade and to calculated SE in the population mean for samples of size 100 based on the population standard deviation for each decade.The means and SEs are relatively similar.
+```{R}
+results<-mutate(results, "SE"= results$sd/sqrt(100))
+
+Sample_means<-mutate(Sample_means, "Mean_dif"=Sample_means$mean-results$mean, "SE_diff"=Sample_means$SE-results$SE)
+
+print(Sample_means)
+```
+8. Generate a sampling distribution of mean runtimeMinutes for each decade by [a] drawing 1000 random samples of 100 movies from each decade, without replacement, and, for each sample, [b] calculating the mean runtimeMinutes and the standard deviation in runtimeMinutes for each decade.
+```{R}
+
+Sample_Dist<-d%>%
+  group_by(Decade)%>% 
+  rep_sample_n(size = 100, replace = FALSE, reps = 1000) 
+
+Sample_Dist<-Sample_Dist%>%
+  group_by(replicate, Decade)%>%
+  summarise(mean = mean(runtimeMinutes, na.rm = TRUE), sd = sd(runtimeMinutes, na.rm=TRUE))
+
+```
+9. Calculate the mean and the standard deviation of the sampling distribution of sample means for each decade. Plot a histogram of the sampling distribution for each decade. Each of the decades has a normal distribution.
+```{R}
+Samp_Dist_M<-Sample_Dist%>%
+  group_by(Decade)%>%
+  summarise(mean=mean(mean), sd=sd(sd, na.rm=TRUE), n=length(Decade))
+
+T<- ggplot(Sample_Dist, aes(x=mean, color = paste(Decade)))+
+  geom_histogram(binwidth = 2)+
+  facet_wrap(vars(Decade))
+T
+```
+
+10.Compare the standard error in runtimeMinutes for each decade using the FIRST sample SE, the population SE, and the sampling distribution SE. The sampling distribution has the smallest SE compared to the population and sample SEs. 
+```{R}
+Samp_Dist_M<-mutate(Samp_Dist_M, "SE"= Samp_Dist_M$sd/sqrt(Samp_Dist_M$n))
+
+SE_Comp<-data.frame(results$Decade, results$SE, Sample_means$SE, Samp_Dist_M$SE)
+
+print(SE_Comp)
+
+```
+# Challenge 2
+1. Read in zombie data
+```{R}
+library(tidyverse)
+
+g<-"https://raw.githubusercontent.com/difiore/ada-2024-datasets/main/zombies.csv"
+
+z<-read.csv(g, header=TRUE)
+```
+2. Calculate population mean and SD for each variable
+```{R}
+Pop_mean <- z%>%
+  summarise_at(c("height", "weight", "zombies_killed", "years_of_education", "age"), mean)
+
+sd.p=function(x){sd(x)*sqrt((length(x)-1)/length(x))}
+
+Pop_sd <- z%>%
+  summarise_at(c("height", "weight", "zombies_killed", "years_of_education", "age"), sd.p)
+
+```
+3. Make boxplots of each variable by gender
+```{R}
+height<-ggplot(data=z, aes(x=gender, y=height))+
+  geom_boxplot(na.rm = TRUE)+
+  geom_jitter(color="red", width = 0.1)+
+  theme(axis.text.x = element_text(angle = 90))+
+  ylab("Height")
+height
+
+weight<-ggplot(data=z, aes(x=gender, y=weight))+
+  geom_boxplot(na.rm = TRUE)+
+  geom_jitter(color="blue", width = 0.1)+
+  theme(axis.text.x = element_text(angle = 90))+
+  ylab("Weight")
+weight
+
+age<-ggplot(data=z, aes(x=gender, y=age))+
+  geom_boxplot(na.rm = TRUE)+
+  geom_jitter(color="green", width = 0.1)+
+  theme(axis.text.x = element_text(angle = 90))+
+  ylab("Age")
+age
+
+zk<-ggplot(data=z, aes(x=gender, y=zombies_killed))+
+  geom_boxplot(na.rm = TRUE)+
+  geom_jitter(color="purple", width = 0.1)+
+  theme(axis.text.x = element_text(angle = 90))+
+  ylab("Zombies killed")
+zk
+
+ye<-ggplot(data=z, aes(x=gender, y=years_of_education))+
+  geom_boxplot(na.rm = TRUE)+
+  geom_jitter(color="turquoise", width = 0.1)+
+  theme(axis.text.x = element_text(angle = 90))+
+  ylab("Years of Education")
+ye
+```
+
+4. Scatterplot height vs. age and weight vs. age and color code by gender. Height and weight incease with age.
+```{R}
+ha<-ggplot(data=z, aes(x=age, y=height))+
+  geom_point(na.rm = TRUE)+
+  geom_point(aes(color=factor(gender)), na.rm = TRUE)+
+  xlab("Age")+
+  ylab("Height")+
+  geom_smooth(method = "lm", na.rm = TRUE)
+ha  
+
+wa<-ggplot(data=z, aes(x=age, y=weight))+
+  geom_point(na.rm = TRUE)+
+  geom_point(aes(color=factor(gender)), na.rm = TRUE)+
+  xlab("Age")+
+  ylab("Weight")+
+  geom_smooth(method = "lm", na.rm = TRUE)
+wa
+
+```
+
+5. Use histograms and Q-Q plots to check all 5 variables for a normal distribution. Zombies killed and years of education are not normally distributed, but follow a poisson distribution.
+```{R}
+hh<-ggplot(data=z, aes(height))+
+    geom_histogram(bins = 18, aes(y=..density..))+ 
+    geom_density()
+hh
+
+qqnorm(z$height, pch = 1, frame = FALSE)
+qqline(z$height, col = "red", lwd = 2)
+
+wh<-ggplot(data=z, aes(weight))+
+    geom_histogram(bins = 18, aes(y=..density..))+ 
+    geom_density()
+wh
+
+qqnorm(z$weight, pch = 1, frame = FALSE)
+qqline(z$weight, col = "blue", lwd = 2)
+
+ah<-ggplot(data=z, aes(age))+
+    geom_histogram(bins = 18, aes(y=..density..))+ 
+    geom_density()
+ah
+
+qqnorm(z$age, pch = 1, frame = FALSE)
+qqline(z$age, col = "green", lwd = 2)
+
+zkh<-ggplot(data=z, aes(zombies_killed))+
+    geom_histogram(bins = 18, aes(y=..density..))+ 
+    geom_density()
+zkh
+
+qqnorm(z$zombies_killed, pch = 1, frame = FALSE)
+qqline(z$zombies_killed, col = "purple", lwd = 2)
+
+yeh<-ggplot(data=z, aes(years_of_education))+
+    geom_histogram(bins = 18, aes(y=..density..))+ 
+    geom_density()
+yeh
+
+qqnorm(z$years_of_education, pch = 1, frame = FALSE)
+qqline(z$years_of_education, col = "turquoise", lwd = 2)
+
+```
+
+6. Sample 50 individuals without replacement. Calculate mean and SD for each variable. Calculate SE for each variable. Use SE to make a 95% CI for each mean.
+```{R}
+zs<-slice_sample(z, n=50, replace = FALSE)
+
+zs_mean <- zs%>%
+  summarise_at(c("height", "weight", "zombies_killed", "years_of_education", "age"), mean)
+
+zs_sd <- zs%>%
+  summarise_at(c("height", "weight", "zombies_killed", "years_of_education", "age"), sd)
+
+se=function(x){sd(x)/sqrt(length(x))}
+
+zs_se<-zs%>%
+   summarise_at(c("height", "weight", "zombies_killed", "years_of_education", "age"), se)
+
+ci=function(x){
+  mean(x) + c(-1,1) * qnorm(1-0.05/2) * se(x)
+}
+
+zs_ci<-zs%>%
+   summarise_at(c("height", "weight", "zombies_killed", "years_of_education", "age"), ci)
+
+```
+7. Draw 199 samples of 50 individuals and calculate the mean for each sample. Combine with first sample to make 200. Calculate the mean and SD of the sampling distribution for each variable. Compare the sampling distribution SD to the SE of the first sample. The SE and SD are very similar. 
+```{R}
+
+z_sample_dist<-z%>% 
+  rep_sample_n(size = 50, replace = FALSE, reps = 199)%>%
+  bind_rows(zs)
+
+z_sample_dist_m<-z_sample_dist%>%
+  group_by(replicate)%>%
+  summarise_at(c("height", "weight", "zombies_killed", "years_of_education", "age"), mean)
+
+z_sample_dist_sd<-z_sample_dist%>%
+  group_by(replicate)%>%
+  summarise_at(c("height", "weight", "zombies_killed", "years_of_education", "age"), sd)
+
+zsd_m<-z_sample_dist_m%>%
+  summarise_at(c("height", "weight", "zombies_killed", "years_of_education", "age"), mean)
+
+zsd_sd<-z_sample_dist_sd%>%
+  summarise_at(c("height", "weight", "zombies_killed", "years_of_education", "age"), sd)
+
+zsd_sd<- zsd_sd%>%
+  pivot_longer(cols = 1:5, values_to = "sd")
+
+zs_se<- zs_se%>%
+  pivot_longer(cols = 1:5, values_to = "se")
+
+sd_se_Comp<-data.frame(zs_se$name, zsd_sd$sd, zs_se$se)%>%
+  mutate(Diff=zsd_sd.sd-zs_se.se)
+
+print(sd_se_Comp)
+```
+8. Plot the sampling distributions for each variable mean.They are all normally distributed (although a bit wonky)
+```{R}
+zsd_h_hist<-ggplot(data=z_sample_dist_m, aes(height))+
+    geom_histogram(bins = 20, aes(y=..density..))+ 
+    geom_density()
+zsd_h_hist
+
+zsd_w_hist<-ggplot(data=z_sample_dist_m, aes(weight))+
+    geom_histogram(bins = 20, aes(y=..density..))+ 
+    geom_density()
+zsd_w_hist
+
+zsd_zk_hist<-ggplot(data=z_sample_dist_m, aes(zombies_killed))+
+    geom_histogram(bins = 20, aes(y=..density..))+ 
+    geom_density()
+zsd_zk_hist
+
+zsd_ye_hist<-ggplot(data=z_sample_dist_m, aes(years_of_education))+
+    geom_histogram(bins = 20, aes(y=..density..))+ 
+    geom_density()
+zsd_ye_hist
+
+zsd_age_hist<-ggplot(data=z_sample_dist_m, aes(age))+
+    geom_histogram(bins = 20, aes(y=..density..))+ 
+    geom_density()
+zsd_age_hist
+
+```
+
+9. Construct a 95% confidence interval for each mean directly from the sampling distribution of sample means using the central 95% that distribution. How do the various 95% CIs you estimated compare to one another? The CI from the sampling distribution is tighter than the CI from the single sample. 
+```{R}
+ci=function(x){
+  mean(x) + c(-1,1) * qnorm(1-0.05/2) * se(x)
+}
+
+zsd_ci<-z_sample_dist_m%>%
+   summarise_at(c("height", "weight", "zombies_killed", "years_of_education", "age"), ci)
+
+zsd_ci<- zsd_ci%>%
+  pivot_longer(cols = 1:5, cols_vary = "slowest")
+
+zs_ci<- zs_ci%>%
+  pivot_longer(cols = 1:5, cols_vary = "slowest")
+
+ci_Comp<-data.frame(zs_ci$name, zsd_ci$value, zs_ci$value)%>%
+  mutate(Diff=zsd_ci.value-zs_ci.value)
+
+print(ci_Comp)
+
+```
+10. Finally, use bootstrapping to generate a 95% confidence interval for each variable mean by resampling 1000 samples, with replacement, from your original sample (i.e., by setting the lower and upper CI bounds to 2.5% and 97.5% of the way through the sampling distribution generated by bootstrapping).
+```{R}
+ci=function(x){
+  mean(x) + c(-1,1) * qnorm(1-0.05/2) * se(x)
+}
+
+n_boot<-1000
+
+boot <- as.data.frame(z) %>%
+    rep_sample_n(size = length(z), replace = TRUE, reps = n_boot) %>%
+    summarise_at(c("height", "weight", "zombies_killed", "years_of_education", "age"), mean)
+
+boot_ci<-boot%>%
+    summarise_at(c("height", "weight", "zombies_killed", "years_of_education", "age"), ci)
+
+print(boot_ci)
+
+```
+
+
+
+
+
+
+
+
+
